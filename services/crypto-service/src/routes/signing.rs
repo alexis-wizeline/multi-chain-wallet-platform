@@ -3,7 +3,7 @@ use crate::{
         requests::{SignTxRequest, SingMsRequest},
         responses::{SignedMsResponse, SignedTXResponse},
     },
-    services::crypto_service::{sign_message, sign_trasaction},
+    services::crypto_service::{sign_and_send_trasaction, sign_message},
     state::AppState,
 };
 use axum::{Json, Router, extract::State, routing::post};
@@ -26,15 +26,14 @@ async fn sing_tx(
         .get(req.account_index)
         .expect("Account not found");
 
-    let hash = state.rpc.get_latest_blockhash().expect("latest blockhash");
-    let signed = sign_trasaction(kp, req.serialize_tx, hash);
+    let signed = sign_and_send_trasaction(&state.rpc, kp, req.serialize_tx);
 
     let mut res = SignedTXResponse {
-        signed_tx: String::new(),
+        signature: String::new(),
         error: String::new(),
     };
     match signed {
-        Ok(sig) => res.signed_tx = sig,
+        Ok(sig) => res.signature = sig,
         Err(err) => res.error = err,
     };
 
