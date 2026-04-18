@@ -8,9 +8,6 @@ export class TransactionController {
 
   @Post('transfer')
   async trnsfer(@Body() dto: TransferDto) {
-    return this.service.transfer({
-      ...dto,
-      from: dto.to, // ⚠️ fix later with wallet lookup
-    });
+    return this.service.transfer(dto);
   }
 }

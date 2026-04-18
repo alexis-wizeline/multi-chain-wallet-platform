@@ -10,6 +10,19 @@ export class WalletController {
     return this.service.createWallet();
   }
 
+  @Get(':walletID/accounts/:accountIndex')
+  getAccount(
+    @Param('walletID') walletID: string,
+    @Param('accountIndex') accountIndex: number,
+  ) {
+    return this.service.getAccount(walletID, accountIndex);
+  }
+
+  @Get(':walleteID/accounts')
+  listAccounts(@Param('walletID') walletID: string) {
+    return this.service.listAccounts(walletID);
+  }
+
   @Post(':pubkey/airdrop')
   airdrop(@Param('pubkey') pubkey: string) {
     return this.service.airdrop(pubkey);

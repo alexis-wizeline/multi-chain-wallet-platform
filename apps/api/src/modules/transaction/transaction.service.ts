@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { SignerClient } from 'src/clients/signer.client';
+import { TransferDto } from 'src/dto/transfer.dto';
 import { SolanaService } from 'src/solana/solana.service';
 
 @Injectable()
@@ -9,15 +10,14 @@ export class TransactionService {
     private signer: SignerClient,
   ) {}
 
-  async transfer(dto: {
-    from: string;
-    to: string;
-    lamports: number;
-    wallet_id: string;
-    account_index: number;
-  }): Promise<string> {
+  async transfer(dto: TransferDto): Promise<string> {
+    const account = await this.signer.getAccount(
+      dto.wallet_id,
+      dto.account_index,
+    );
+
     const unsignedTx = await this.solana.buildTransferTx(
-      dto.from,
+      account.pubkey,
       dto.to,
       dto.lamports,
     );

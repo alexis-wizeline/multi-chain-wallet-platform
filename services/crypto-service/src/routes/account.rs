@@ -12,6 +12,7 @@ pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/:wallet_id", post(add_account))
         .route("/:wallet_id", get(list_accounts))
+        .route("/:wallet_id/:account_index", get(get_account))
 }
 
 async fn add_account(
@@ -51,4 +52,22 @@ async fn list_accounts(
         .collect();
 
     Json(result)
+}
+
+async fn get_account(
+    Path((wallet_id, account_index)): Path<(String, usize)>,
+    State(state): State<AppState>,
+) -> Json<AccountResponse> {
+    let wallets = state.wallets.read().await;
+
+    let kp = wallets
+        .get(&wallet_id)
+        .expect("wallet not found")
+        .get(account_index)
+        .expect("account not found for the given index");
+
+    Json(AccountResponse {
+        index: account_index as u32,
+        pubkey: kp.pubkey().to_string(),
+    })
 }
