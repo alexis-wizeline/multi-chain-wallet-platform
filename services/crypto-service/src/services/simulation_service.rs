@@ -32,6 +32,6 @@ pub fn simulate_transaction(
 
     Ok(SimulationOutcome {
         logs: response.value.logs.unwrap_or_default(),
-        units_onsumed: response.value.units_consumed,
+        units_consumed: response.value.units_consumed,
     })
 }
