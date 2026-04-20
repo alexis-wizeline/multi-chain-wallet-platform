@@ -7,8 +7,11 @@ use solana_sdk::{
 };
 
 use crate::{
-    error::AppError, models::signing::SignIntent,
-    services::validation_service::validate_transaction,
+    error::AppError,
+    models::signing::SignIntent,
+    services::{
+        simulation_service::simulate_transaction, validation_service::validate_transaction,
+    },
 };
 
 pub fn sign_and_send_trasaction(
@@ -24,8 +27,18 @@ pub fn sign_and_send_trasaction(
     let mut tx: Transaction = deserialize(&tx_bytes)
         .map_err(|e| AppError::Serialzation(format!("transaction decode failed: {}", e)))?;
 
+    // validate transaction with intent <- ensure the tx is well formed
     validate_transaction(&tx, &keypair.pubkey(), &intent)?;
 
+    // simulate transaction before sign <- if it fails we don't sign, this is to ensure that the tx will pass and let all validations on chain to ocurr
+    // i.e enough balance in the accounts
+    // it retuns an outcome so it can be logged
+    let _sim = simulate_transaction(client, &tx)?;
+
+    // layer 3 of what we can say our signing process
+    // layer 1 validate intent of the tx
+    // layer 2 simulate the tx and we can avoid sent transactions that will fail avoding to consume computed units.
+    // layer 3 actual work fetch fresh blockhash and sig -> send the transaction
     let recent_blockhash = client
         .get_latest_blockhash()
         .map_err(|e| AppError::Rpc(format!("get_latest_blockhash failed: {}", e)))?;

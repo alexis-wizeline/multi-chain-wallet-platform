@@ -6,6 +6,7 @@ use axum::{
 use serde_json::json;
 use thiserror::Error;
 
+#[allow(dead_code)]
 #[derive(Debug, Error)]
 pub enum AppError {
     #[error("aallet not found")]
@@ -16,6 +17,8 @@ pub enum AppError {
     InvalidRequest(String),
     #[error("transaction validation failed: {0}")]
     ValidationFailed(String),
+    #[error("transaction simulation failed: {0}")]
+    SimulationFailed(String),
     #[error("serilazation error: {0}")]
     Serialzation(String),
     #[error("rpc error: {0}")]
@@ -30,7 +33,8 @@ impl IntoResponse for AppError {
             AppError::AccountNotFound | AppError::WalletNotFound => StatusCode::NOT_FOUND,
             AppError::InvalidRequest(_)
             | AppError::ValidationFailed(_)
-            | AppError::Serialzation(_) => StatusCode::BAD_REQUEST,
+            | AppError::Serialzation(_)
+            | AppError::SimulationFailed(_) => StatusCode::BAD_REQUEST,
             AppError::Rpc(_) | AppError::Internal(_) => StatusCode::BAD_GATEWAY,
         };
 
