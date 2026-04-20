@@ -6,23 +6,30 @@ use solana_sdk::{
     transaction::Transaction,
 };
 
+use crate::{error::AppError, services::validation_service::validate_transaction};
+
 pub fn sign_and_send_trasaction(
     client: &RpcClient,
     keypair: &Keypair,
     serialized_tx: String,
-) -> Result<String, String> {
+) -> Result<String, AppError> {
     let tx_bytes = BASE64_STANDARD
         .decode(serialized_tx)
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| AppError::Serialzation(format!("base64 decode failed: {}", e)))?;
 
-    let mut tx: Transaction = deserialize(&tx_bytes).map_err(|e| e.to_string())?;
+    let mut tx: Transaction = deserialize(&tx_bytes)
+        .map_err(|e| AppError::Serialzation(format!("transaction decode failed: {}", e)))?;
 
-    let recent_blockhash = client.get_latest_blockhash().map_err(|e| e.to_string())?;
+    validate_transaction(&tx, &keypair.pubkey())?;
+
+    let recent_blockhash = client
+        .get_latest_blockhash()
+        .map_err(|e| AppError::Rpc(format!("get_latest_blockhash failed: {}", e)))?;
     tx.sign(&[keypair], recent_blockhash);
 
     let signature = client
         .send_and_confirm_transaction(&tx)
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| AppError::Rpc(format!("send_and_confirm_transaction failed: {}", e)))?;
 
     Ok(signature.to_string())
 }

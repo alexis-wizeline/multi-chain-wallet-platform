@@ -16,7 +16,6 @@ pub struct AccountResponse {
 #[derive(Serialize)]
 pub struct SignedTXResponse {
     pub signature: String,
-    pub error: String,
 }
 
 #[derive(Serialize)]

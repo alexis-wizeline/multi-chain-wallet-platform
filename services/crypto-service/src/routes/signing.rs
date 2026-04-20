@@ -1,4 +1,5 @@
 use crate::{
+    error::AppError,
     models::{
         requests::{SignTxRequest, SingMsRequest},
         responses::{SignedMsResponse, SignedTXResponse},
@@ -17,42 +18,37 @@ pub fn routes() -> Router<AppState> {
 async fn sing_tx(
     State(state): State<AppState>,
     Json(req): Json<SignTxRequest>,
-) -> Json<SignedTXResponse> {
+) -> Result<Json<SignedTXResponse>, AppError> {
     let wallets = state.wallets.read().await;
 
-    let kp = &wallets
+    let wallet = &wallets
         .get(&req.wallet_id)
-        .expect("wallet not found")
+        .ok_or(AppError::WalletNotFound)?;
+
+    let account = wallet
         .get(req.account_index)
-        .expect("Account not found");
+        .ok_or(AppError::AccountNotFound)?;
 
-    let signed = sign_and_send_trasaction(&state.rpc, kp, req.serialize_tx);
+    let signature = sign_and_send_trasaction(&state.rpc, account, req.serialize_tx)?;
 
-    let mut res = SignedTXResponse {
-        signature: String::new(),
-        error: String::new(),
-    };
-    match signed {
-        Ok(sig) => res.signature = sig,
-        Err(err) => res.error = err,
-    };
-
-    Json(res)
+    Ok(Json(SignedTXResponse { signature }))
 }
 
 async fn sign_msg(
     State(state): State<AppState>,
     Json(req): Json<SingMsRequest>,
-) -> Json<SignedMsResponse> {
+) -> Result<Json<SignedMsResponse>, AppError> {
     let wallets = state.wallets.read().await;
 
-    let kp = wallets
+    let wallet = wallets
         .get(&req.wallet_id)
-        .expect("wallet not found")
+        .ok_or(AppError::WalletNotFound)?;
+
+    let account = wallet
         .get(req.account_index)
-        .expect("Account not found");
+        .ok_or(AppError::AccountNotFound)?;
 
-    let signed_tx = sign_message(kp, req.message.as_bytes());
+    let signed_tx = sign_message(account, req.message.as_bytes());
 
-    Json(SignedMsResponse { signed_tx })
+    Ok(Json(SignedMsResponse { signed_tx }))
 }
