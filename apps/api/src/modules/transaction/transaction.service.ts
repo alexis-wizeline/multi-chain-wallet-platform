@@ -26,6 +26,12 @@ export class TransactionService {
       walletID: dto.wallet_id,
       accountIndex: dto.account_index,
       serializedTx: unsignedTx,
+      intent: {
+        kind: 'sol_transfer',
+        from: account.pubkey,
+        to: dto.to,
+        lamports: dto.lamports,
+      },
     });
 
     return result.signature;

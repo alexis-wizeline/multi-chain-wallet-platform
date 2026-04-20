@@ -4,11 +4,20 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { from } from 'rxjs';
+
+type SolTransferIntent = {
+  kind: 'sol_transfer';
+  from: string;
+  to: string;
+  lamports: number;
+};
 
 type SignAndSendTxPayload = {
   walletID: string;
   accountIndex: number;
   serializedTx: string;
+  intent: SolTransferIntent;
 };
 
 type AccountResponse = {
@@ -94,6 +103,7 @@ export class SignerClient {
         wallet_id: payload.walletID,
         account_index: payload.accountIndex,
         serialized_tx: payload.serializedTx,
+        intent: payload.intent,
       }),
     });
 
