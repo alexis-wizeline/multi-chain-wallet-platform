@@ -22,12 +22,12 @@ pub fn simulate_transaction(
         .map_err(|e| AppError::Rpc(format!("simulate_transaction_config failed: {}", e)))?;
 
     if let Some(err) = response.value.err {
-        let logs = response.value.logs.unwrap_or_default().join("\n");
+        let logs = response.value.logs.unwrap_or_default();
 
-        return Err(AppError::SimulationFailed(format!(
-            "simulation error: {:?}\nlogs:\n{}",
-            err, logs
-        )));
+        return Err(AppError::SimulationFailed {
+            logs: logs,
+            reason: format!("{:?}", err),
+        });
     }
 
     Ok(SimulationOutcome {
