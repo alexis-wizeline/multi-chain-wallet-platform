@@ -29,7 +29,7 @@ async fn sing_tx(
         .get(req.account_index)
         .ok_or(AppError::AccountNotFound)?;
 
-    let signature = sign_and_send_trasaction(&state.rpc, account, req.serialize_tx)?;
+    let signature = sign_and_send_trasaction(&state.rpc, account, req.serialize_tx, req.intent)?;
 
     Ok(Json(SignedTXResponse { signature }))
 }

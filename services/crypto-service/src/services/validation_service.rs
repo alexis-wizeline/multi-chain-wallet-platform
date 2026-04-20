@@ -2,13 +2,23 @@ use solana_client::rpc_response::transaction::CompiledInstruction;
 use solana_sdk::{message::Instruction, pubkey::Pubkey, transaction::Transaction};
 use solana_system_interface::{instruction as system_instruction, program as system_program};
 
-use crate::error::AppError;
+use crate::{error::AppError, models::signing::SignIntent};
 
-pub fn validate_transaction(tx: &Transaction, signer_pubkey: &Pubkey) -> Result<(), AppError> {
+pub fn validate_transaction(
+    tx: &Transaction,
+    signer_pubkey: &Pubkey,
+    intent: &SignIntent,
+) -> Result<(), AppError> {
     validate_fee_payer(tx, signer_pubkey)?;
     validate_signer_present(tx, signer_pubkey)?;
     validate_allowed_programs(tx)?;
-    validate_supported_instructions(tx, signer_pubkey)?;
+
+    match intent {
+        SignIntent::SolTransfer { from, to, lamports } => {
+            validate_sol_transfer_intent(tx, signer_pubkey, from, to, *lamports)?;
+        }
+    }
+
     Ok(())
 }
 
@@ -58,45 +68,58 @@ fn validate_allowed_programs(tx: &Transaction) -> Result<(), AppError> {
     Ok(())
 }
 
-fn validate_supported_instructions(
+fn validate_sol_transfer_intent(
     tx: &Transaction,
     signer_pubkey: &Pubkey,
+    expected_from: &str,
+    expected_to: &str,
+    expected_lamports: u64,
 ) -> Result<(), AppError> {
-    for ix in &tx.message.instructions {
-        let program_id = get_program_id(tx, ix)?;
+    if tx.message.instructions.len() != 1 {
+        return Err(AppError::ValidationFailed(
+            "Sol transfer require exactly one instruction".into(),
+        ));
+    }
 
-        if program_id == system_program::id() {
-            validate_system_instruction(tx, ix, signer_pubkey)?;
-        } else {
-            return Err(AppError::ValidationFailed(format!(
-                "unsupported program {}",
-                program_id
-            )));
-        }
+    let expected_from_pubkey = expected_from
+        .parse::<Pubkey>()
+        .map_err(|e| AppError::InvalidRequest(format!("invalid intent.from pubkey: {}", e)))?;
+
+    let expected_to_pubkey = expected_to
+        .parse::<Pubkey>()
+        .map_err(|e| AppError::InvalidRequest(format!("invalid intent.to pubkey: {}", e)))?;
+
+    if &expected_from_pubkey != signer_pubkey {
+        return Err(AppError::ValidationFailed(format!(
+            "intent.from {} does not match signer {}",
+            expected_to_pubkey, signer_pubkey
+        )));
+    }
+
+    let parsed = parse_system_transfer(tx, &tx.message.instructions[0])?;
+
+    if parsed.from != expected_from_pubkey {
+        return Err(AppError::ValidationFailed(format!(
+            "transaction from {} does not match intention.from {}",
+            parsed.from, expected_from_pubkey
+        )));
+    }
+
+    if parsed.to != expected_to_pubkey {
+        return Err(AppError::ValidationFailed(format!(
+            "transaction to {}, does not match intention.to {}",
+            parsed.to, expected_to_pubkey
+        )));
+    }
+
+    if parsed.lamports != expected_lamports {
+        return Err(AppError::ValidationFailed(format!(
+            "transaction lamports {} does not match intent.lamports {}",
+            parsed.lamports, expected_lamports
+        )));
     }
 
     Ok(())
-}
-
-fn validate_system_instruction(
-    tx: &Transaction,
-    ix: &CompiledInstruction,
-    signer_pubkey: &Pubkey,
-) -> Result<(), AppError> {
-    let instruction = decode_system_instruction(tx, ix)?;
-
-    match instruction {
-        SystemInstructionShape::Transfer { from, .. } => {
-            if &from != signer_pubkey {
-                return Err(AppError::ValidationFailed(format!(
-                    "transfer source {} does not match signer {}",
-                    from, signer_pubkey
-                )));
-            }
-
-            Ok(())
-        }
-    }
 }
 
 fn get_program_id(tx: &Transaction, ix: &CompiledInstruction) -> Result<Pubkey, AppError> {
@@ -107,14 +130,17 @@ fn get_program_id(tx: &Transaction, ix: &CompiledInstruction) -> Result<Pubkey, 
         .ok_or_else(|| AppError::ValidationFailed("invalid program id index".into()))
 }
 
-enum SystemInstructionShape {
-    Transfer { from: Pubkey },
+#[derive(Debug)]
+struct ParseSystemTransfer {
+    from: Pubkey,
+    to: Pubkey,
+    lamports: u64,
 }
 
-fn decode_system_instruction(
+fn parse_system_transfer(
     tx: &Transaction,
     ix: &CompiledInstruction,
-) -> Result<SystemInstructionShape, AppError> {
+) -> Result<ParseSystemTransfer, AppError> {
     let program_id = get_program_id(tx, ix)?;
     if program_id != system_program::id() {
         return Err(AppError::ValidationFailed(
@@ -122,7 +148,7 @@ fn decode_system_instruction(
         ));
     }
 
-    let account_metas = ix
+    let accounts = ix
         .accounts
         .iter()
         .map(|idx| {
@@ -141,15 +167,17 @@ fn decode_system_instruction(
     };
 
     match bincode::deserialize::<system_instruction::SystemInstruction>(&instruction.data) {
-        Ok(system_instruction::SystemInstruction::Transfer { lamports: _ }) => {
-            if account_metas.len() < 2 {
+        Ok(system_instruction::SystemInstruction::Transfer { lamports }) => {
+            if accounts.len() < 2 {
                 return Err(AppError::ValidationFailed(
                     "transfer requires at least 2 accounts".into(),
                 ));
             }
 
-            Ok(SystemInstructionShape::Transfer {
-                from: account_metas[0],
+            Ok(ParseSystemTransfer {
+                from: accounts[0],
+                to: accounts[1],
+                lamports,
             })
         }
         Ok(_) => Err(AppError::ValidationFailed(

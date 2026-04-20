@@ -6,12 +6,16 @@ use solana_sdk::{
     transaction::Transaction,
 };
 
-use crate::{error::AppError, services::validation_service::validate_transaction};
+use crate::{
+    error::AppError, models::signing::SignIntent,
+    services::validation_service::validate_transaction,
+};
 
 pub fn sign_and_send_trasaction(
     client: &RpcClient,
     keypair: &Keypair,
     serialized_tx: String,
+    intent: SignIntent,
 ) -> Result<String, AppError> {
     let tx_bytes = BASE64_STANDARD
         .decode(serialized_tx)
@@ -20,7 +24,7 @@ pub fn sign_and_send_trasaction(
     let mut tx: Transaction = deserialize(&tx_bytes)
         .map_err(|e| AppError::Serialzation(format!("transaction decode failed: {}", e)))?;
 
-    validate_transaction(&tx, &keypair.pubkey())?;
+    validate_transaction(&tx, &keypair.pubkey(), &intent)?;
 
     let recent_blockhash = client
         .get_latest_blockhash()
