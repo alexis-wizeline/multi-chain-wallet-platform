@@ -4,7 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { from } from 'rxjs';
+import { throwMappedSignerError } from 'src/common/signer-error.util';
 
 type SolTransferIntent = {
   kind: 'sol_transfer';
@@ -35,18 +35,25 @@ export class SignerClient {
       'http://localhost:3000';
   }
 
+  private async parseResponse<T>(res: Response): Promise<T> {
+    const contentTye = res.headers.get('Content-Type') ?? '';
+    const isJson = contentTye.includes('application/json');
+
+    const body = isJson ? await res.json() : await res.text();
+
+    if (!res.ok) {
+      throwMappedSignerError(res.status, body);
+    }
+
+    return body as T;
+  }
+
   async createWallet(): Promise<{ walletID: string }> {
     const res = await fetch(`${this.baseUrl}/wallets`, {
       method: 'POST',
     });
 
-    if (!res.ok) {
-      throw new BadGatewayException(
-        'Failed to create wallet in signer service',
-      );
-    }
-
-    return res.json() as Promise<{ walletID: string }>;
+    return this.parseResponse<{ walletID: string }>(res);
   }
 
   async getAccount(
@@ -60,17 +67,7 @@ export class SignerClient {
       },
     );
 
-    if (res.status === 404) {
-      throw new NotFoundException('Account not found in signer service');
-    }
-
-    if (!res.ok) {
-      throw new BadGatewayException(
-        'failed to get account from signer service',
-      );
-    }
-
-    return res.json() as Promise<AccountResponse>;
+    return this.parseResponse<AccountResponse>(res);
   }
 
   async listAccounts(walletID: string): Promise<AccountResponse[]> {
@@ -78,17 +75,7 @@ export class SignerClient {
       method: 'GET',
     });
 
-    if (res.status === 404) {
-      throw new NotFoundException('Wallet not found in signer service');
-    }
-
-    if (!res.ok) {
-      throw new BadGatewayException(
-        'Failed to list accounst in signer service',
-      );
-    }
-
-    return res.json() as Promise<AccountResponse[]>;
+    return this.parseResponse<AccountResponse[]>(res);
   }
 
   async signAndSendTx(
@@ -107,13 +94,7 @@ export class SignerClient {
       }),
     });
 
-    if (!res.ok) {
-      throw new BadGatewayException(
-        `Signer service failed to sing/send transaction ${res.status} ${res.statusText}`,
-      );
-    }
-
-    return res.json() as Promise<{ signature: string }>;
+    return this.parseResponse<{ signature: string }>(res);
   }
 
   async airdrop(
@@ -128,13 +109,7 @@ export class SignerClient {
       body: JSON.stringify({ pubkey, lamports }),
     });
 
-    if (!res.ok) {
-      throw new BadGatewayException(
-        `Signer service failed to airdrop ${res.status} ${res.statusText}`,
-      );
-    }
-
-    return res.json() as Promise<{ signature: string }>;
+    return this.parseResponse<{ signature: string }>(res);
   }
 
   async getBalance(pubkey: string): Promise<{ balance: number }> {
@@ -142,12 +117,6 @@ export class SignerClient {
       method: 'GET',
     });
 
-    if (!res.ok) {
-      throw new BadGatewayException(
-        `Signer service failed to get balance ${res.status} ${res.statusText}`,
-      );
-    }
-
-    return res.json() as Promise<{ balance: number }>;
+    return this.parseResponse<{ balance: number }>(res);
   }
 }
